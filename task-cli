@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+import sys
+import json
+from enum import Enum
+
+VERSION = 0.1
+DATA_FILE = "./data.json"
+EXPECTATIONS = {
+    "add": 1,
+    "update": 2,
+    "delete": 1,
+    "mark-in-progress": 1,
+    "mark-done": 1,
+}
+
+HELP = f"""
+Usage:
+    {sys.argv[0]} [command] ...args
+
+Commands:
+    help                    Shows this message
+    version                 Shows the version of this cli
+    add TASK                Adds a task TASK to the list
+    update ID TASK          Updates a task with id ID on the list
+    delete ID               Deletes a task with id ID on the list
+    mark-in-progress ID     Marks the task with id ID as in-progress
+    mark-done ID            Marks the task with id ID as done
+    list FILTER             lists the tasks in the list. FILTER can either be "done", "todo", "in-progress", or empty to list out all the tasks in the list.
+""".strip()
+
+
+class Status(Enum):
+    TODO = "todo"
+    IN_PROGRESS = "in-progress"
+    DONE = "done"
+
+
+data = {}
+
+
+def show_help():
+    print(HELP)
+
+class EnumEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
+
+def commit():
+    with open(DATA_FILE, "w") as fp:
+        json.dump(data, fp, cls=EnumEncoder)
+
+
+def add_task(task: str):
+    data["tasks"].append([task, Status.TODO])
+    commit()
+    print(f"Task added successfully at id {len(data["tasks"])}")
+
+
+def update_task(id: int, text: str):
+    try:
+        data["tasks"][id - 1][0] = text
+        commit()
+        print(f"task {id} updated successfully")
+    except IndexError:
+        print(f'No task with id "{id}" exists')
+
+
+def delete_task(id: int):
+    try:
+        data["tasks"].pop(id - 1)
+        commit()
+        print(f"Task {id} updated successfully")
+    except IndexError:
+        print(f'No task with id "{id}" exists')
+
+
+def mark_task(id: int, status: Status):
+    try:
+        data["tasks"][id - 1][1] = status
+        commit()
+        print(f"Task {id} updated successfully")
+    except IndexError:
+        print(f'No task with id "{id}" exists')
+
+
+def list_tasks(filter=None):
+    if filter == None:
+        print("Tasks:")
+        for i, task in enumerate(data["tasks"]):
+            print(f"{i + 1}. {task[0]} ({task[1]})")
+        return
+
+    accepted = [Status.DONE.value, Status.IN_PROGRESS.value, Status.TODO.value]
+
+    if filter not in accepted:
+        raise Exception(
+            'Invalid filter rule. "list" accepts "done", "todo", and "in-progress"'
+        )
+
+    filtered = [(i, task) for i, task in enumerate(data["tasks"]) if task[1] == filter]
+    print("Tasks:")
+    for i, task in filtered:
+        print(f"{i + 1}. {task[0]} ({task[1]})")
+
+
+def main():
+    global data
+    args = sys.argv[1:]
+
+    # load data file
+    try:
+        try:
+            with open(DATA_FILE, "r") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            with open(DATA_FILE, "w") as f:
+                data = {"version": VERSION, "tasks": []}
+                json.dump(data, f)
+    except json.JSONDecodeError:
+        print(
+            "Error: Could not parse JSON file. Delete data.json and restart this program"
+        )
+        return
+
+    if len(args) == 0:
+        show_help()
+        return
+
+    command = args[0]
+    args = args[1:]
+    l_args = len(args)
+
+    if command in EXPECTATIONS and EXPECTATIONS[command] != l_args:
+        print(
+            f'Error: command "{command}" expects {EXPECTATIONS[command]} argument(s). Got {l_args} instead.'
+        )
+        return
+
+    try:
+        match command:
+            case "add":
+                add_task(args[0])
+
+            case "update":
+                update_task(int(args[0]), args[1])
+
+            case "delete":
+                delete_task(int(args[0]))
+
+            case "mark-in-progress":
+                mark_task(int(args[0]), Status.IN_PROGRESS)
+
+            case "mark-done":
+                mark_task(int(args[0]), Status.DONE)
+
+            case "list":
+                if l_args == 0:
+                    list_tasks()
+                else:
+                    list_tasks(filter=args[0])
+            
+            case "help":
+                show_help()
+            
+            case "version":
+                print(VERSION)
+
+            case _:
+                raise Exception(f'Invalid command "{command}"')
+
+    except ValueError:
+        print("Unexpected non-numeric number in arguments.")
+
+    # except Exception as e:
+    #     print(f"Error: {str(e)}")
+
+
+if __name__ == "__main__":
+    main()
