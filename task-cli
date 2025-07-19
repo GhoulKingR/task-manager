@@ -55,7 +55,7 @@ def commit():
 def add_task(task: str):
     data["tasks"].append([task, Status.TODO])
     commit()
-    print(f"Task added successfully at id {len(data["tasks"])}")
+    print(f"Task added successfully (ID: {len(data["tasks"])})")
 
 
 def update_task(id: int, text: str):
